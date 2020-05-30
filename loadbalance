@@ -1,0 +1,46 @@
+# haproxyはキャッシュしない、webサーバとしての機能はない。リバースプロキシとしての機能
+1.install
+yum -y install haproxy
+
+2.setting
+vi /etc/haproxy/haproxy.cfg
+frontend main
+    bind 0.0.0.0:80
+    default_backend www.backend.com
+backend www.backend.com
+    #requestの順番に分散
+    balance roundrobin
+    #2minutes per 1check,2times failure change
+    server web01 x.x.x.x:80 check inter 2000 fall 2
+    server web02 x.x.x.x:80 check inter 2000 fall 2
+    
+3.rsyslog setting
+vi /etc/rsyslog.conf
+$Modload imudp
+$UDPServerRun 514
+local2.*    /var/log/haproxy.log
+touch /var/log/haproxy.log
+chown haproxy:haproxy /va/log/haproxy.log
+systemctl restart rsyslog
+
+4. haproxy start
+systemctl start haproxy
+systemctl enable haproxy
+systemctl status haproxy
+
+5.firewall setting
+firewall-cmd --add-service=http --zone=public --permanent
+firewall-cmd --reload
+
+6. apache setting
+index.html setting
+for example
+<html>
+<head>
+<meta charset="utf-8">
+<title>test</title>
+</head>
+<body>
+Apachexxxx
+</body>
+</html>
