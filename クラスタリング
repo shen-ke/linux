@@ -1,0 +1,161 @@
+＃サーバの集合体、ACTIVE/STANDBY
+#　pacemaker1 pacemaker2
+# 外部ネットワーク、内部ネットワークの設定
+
+pacemaker+corosyncにてActive/Stanby構成のクラスタリンク環境を構築する。
+準備
+1.tools install
+  yum -y install vim bash-completion
+2.apache install
+  yum -y install httpd
+  firewall--cmd --add-service=http --permanent
+  firewall--cmd --reload
+  systemctl start httpd
+3.index.html
+ vi /var/www/html/index.html
+ <html>
+    <body>
+     <div style="xxxxxxxx">
+     pacemaker1/pacemaker2
+     </div>
+    </body>
+ </html>
+ 4. ステータスチェックファイル作成
+ vi /etc/httpd/conf.d/server_status.conf
+ ExtendedStatus On
+ <Location /server-status>
+   Sethandler server-status
+   Require local
+ </Location>
+ 
+ 5.apache stop
+  systemctl stop httpd
+  
+ 6. pacemaker package install
+   yum -y install pacemaker pcs
+ 7. hacluster user password setting
+   passwd hacluster
+ 8.pcsd vice start
+   systemctl start pcsd
+   systemctl enable pcsd
+ 9. hosts setting
+   vim /etc/hosts
+   192.168.11.221 pacemaker1
+   192.168.11.222 pacemaker2
+   10.0.0.1 pacemaker1-hb
+   10.0.0.2 pacemaker2-hb
+ 10. firewall setting
+     firewall-cmd --add-service=high-availability --permanent
+     firewall-cmd --reload
+     cat /usr/lib/firewalld/services/high-availability.xml
+ 11. Corosync auto-start setting
+     systemctl enable corosync
+ 12. packemaker service auto-start setting
+     systemctl enable pacemaker
+     
+pacemaker service setting(#1からのみ実行)
+
+1.クラスタにノードを参加させる
+  pcs cluster auth pacemaker1 pacemaker2 -u hacluster --force
+2.クラスタ構成
+  pcs cluster setup --name apachecluster pacemaker1pacemaker2
+3.クラスタ起動
+   pcs cluster start --all
+4.状態確認
+　　pcs status
+5.STONITH無効化設定(相手ノードが不安定になった場合,強制再起動、停止をする。スプリットブレイン防止のため）
+   pcs property set stonith-enabled=false
+6.クォーラム無効化設定（クラスタ内での許容できる障害数の設定、一般的に奇数台にする、共有ディスクに投票結果を保持)
+   pcs property set no-quorum-policy=ignore
+7.フェイルバック無効化設定
+　　pcs resource defaults resource-stickiness=INFINITY
+   pcs resource defaults migration-threshold=1
+8.リソース設定
+　　pcs resource creat VIP ocf:heartbeat:IPaddr2 ip=192.168.11.223 cidr_netmask=24 nic="enp0s3" op monitor interval=10s on-fail="standby"
+   pcs resource creat APACHE ocf:heartbeat:apache configfile=/etc/httpd/conf/httpd.conf statusurl="http://127.0.0.1/server-status" op moniter interval=30s
+9.VIP,APACHEを同じノードで起動する
+　　pcs constraint colocation add APACHE with VIP INFINITY
+10.VIP起動後、APACHE起動
+　　pcs constraint order VIP then APACHE
+  
+Corosync setting
+11. プロセス故障時もノード故障として取り扱い
+　　vim /etc/sysconfig/pacemaker
+   PCMK_fail_fast=yes
+12. corosync.conf setting
+  vim /etc/corosync/corosync.conf
+totem {
+    version: 2
+    cluster_name: apachecluster
+    secauth: off
+    transport: udpu
+    rrp_mode: passive
+    interface {
+        ringnubmer: 0
+           bindnetaddr: 192.168.0.0
+    }
+    interface {
+        ringnubmer: 1
+           bindnetaddr: 10.0.0.0
+    }
+}
+ 
+nodelist {
+    node {
+        ring0_addr: pacemaker1
+        ring1_addr: pacemaker1-hb
+        nodeid: 1
+    }
+ 
+    node {
+        ring0_addr: pacemaker2
+        ring1_addr: pacemaker2-hb
+        nodeid: 2
+    }
+}
+ 
+quorum {
+    provider: corosync_votequorum
+    two_node: 1
+}
+ 
+logging {
+    to_logfile: yes
+    logfile: /var/log/cluster/corosync.log
+    to_syslog: yes
+}
+13. cluster stop
+   pcs cluster stop --all
+14. cluster start
+   pcs cluster start --all
+15. 手動フェイルオーバー
+   pcs cluster standby
+16.　手動フェイルバック
+　　pcs cluster unstandby
+  
+  
+便利コマンド、設定情報の場所
+１．設定一覧
+   pcs config
+２．リソースエラークリーンアップ
+   pcs resource cleanup
+３．状態動的確認
+   crm_mon
+４．PCS設定の状態
+   less /var/lib/pacemaker/cib/cib.xml
+５．メンテナンス手動フェイルオーバー
+   pcs cluster standby
+   pcs cluster unstandby
+６．ログ
+   less /var/log/cluster/corosync.log
+７．リソースエージェント
+   pcs resource list
+   pcs resource describe ocf:heartbeat:IPaddr2
+   pcs resource describe ocf:heartbeat:apache
+   
+   less /usr/lib/ocf/resouce.d/heartbeat/IPaddr2
+   less /usr/lib/ocf/resouce.d/heartbeat/apache
+   
+   
+   
+   
