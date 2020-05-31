@@ -1,0 +1,36 @@
+# ファイルの共有　プリンタ、AD認証の使用
+#　マイクロソフトのプロトコル
+
+#インストール
+yum -y install samba
+systemctl start smb
+systemctl enable smb
+
+#設定
+vi /etc/samba/smb.conf
+ 
+# [share]
+        path = /share
+        writable = yes
+        valid users = +samba
+ writable→書き込み許可、valid users→アクセス許可ユーザ グループの場合は「+」をつける
+ 
+ #設定反映
+ systemctl restart smb
+ 
+ #ユーザ作成
+ useradd user1
+ passwd user1
+ 
+ #sanba用アカウント作成
+pdbedit -a user1
+pdbedit -L -v user1
+
+#sambaグループへ追加
+groupadd samba
+usermod user1 -G samba
+
+#ディレクトリ作成
+mkdir /share
+chgrp samba /share
+chmod 774 /share
