@@ -1,0 +1,80 @@
+# linux+Apache+MySQL+PHP(wordpress)
+#事前準備
+1. tools install 
+   yum -y install wget bash-completion net-tools
+2.OS setting
+   vi /etc/selinux/config
+   SELINUX=disable
+   shutdown -r now
+# mysql install setting
+1. rpm -ivh https://dev.mysql.com/get/mysql80-community-release-el7-2.noarch.rpm
+2. yum -y install mysql-community-server
+   yum -y install mysql-community-devel
+3. systemctl start mysqld
+   systemctl enable mysqld
+4. mysql --version
+5. cat /var/log/mysqld.log | grep root  #root/password
+6. mysql_secure_installation
+    enter y
+7. mysql -u root -p
+    enter password
+8. create database wp;
+9. show databases;
+10. create user 'wp_user'@'localhost' identified by '"WSXcde3';
+11. select * from mysql.user\G
+
+#パスワードの暗号化方式変更
+1. select host,user,plugin from mysql.user where user='wp_user';
+2. alter user 'wp_user'@'localhost' identified with mysql_native_password by '"WSXcde3';
+ 
+3. select host,user,plugin from mysql.user where user='root';
+4. alter user 'root'@'localhost' identified with mysql_native_password by '"WSXcde3';
+ 
+5. grant all privileges on wp.* to 'wp_user'@'localhost';　＃権限付与
+6. flush privileges;    #設定反映
+
+＃php インストール、設定
+1. yum -y install epel-release
+2. yum -y install http://rpms.famillecollet.com/enterprise/remi-release-7.rpm
+3. yum -y install --enablerepo=remi,remi-php73 php php-mysql php-mbstring
+4. vi /etc/php.ini
+   date.timezone =
+   date.timezone = "Asia/Tokyo"
+
+# apache設定
+systemctl start httpd
+systemctl enable httpd
+systemctl status httpd
+
+#ファイアウォール設定(httpの許可)
+firewall-cmd --list-all --zone=public
+firewall-cmd --add-port=80/tcp --zone=public --permanent
+firewall-cmd --reload
+firewall-cmd --list-all --zone=public
+
+#php確認用ファイル作成
+vi /var/www/html/index.php
+<?php phpinfo(); ?>
+
+#wordpress配置
+cd /tmp
+wget https://ja.wordpress.org/latest-ja.zip
+unzip latest-ja.zip
+mv /tmp/wordpress /var/www/
+
+#apache設定
+chown -R apache.apache /var/www/
+ 
+vi /etc/httpd/conf/httpd.conf
+#DocumentRoot "/var/www/html"
+DocumentRoot "/var/www/wordpress"
+ 
+#<Directory "⁄var⁄www⁄html⁄">
+<Directory "⁄var⁄www⁄wordpress⁄">
+ 
+systemctl restart httpd
+
+#ブラウザへアクセス
+データベース：wp
+ユーザ：wp_user
+パスワード："WSXcde3
