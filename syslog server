@@ -1,0 +1,28 @@
+# server 192.168.11.221
+# client 192.168.11.222
+
+# server setting
+vi /etc/rsyslog.conf
+  set nu
+	 15 ModLoad imudp 
+	 16 UDPServerRun 514
+firewall-cmd --list-all --zone=public
+firewall-cmd --add-port=514/udp --zone=public --permanent
+firewall-cmd --reload
+systemctl restart rsyslog
+tail -f /var/log/messages
+
+#client
+vi /etc/rsyslog.conf
+*.info;mail.none;authpriv.none;cron.none  /var/log/messages
+*.* @192.168.11.221:514
+systemctl restart rsyslog
+
+
+#server
+$template Secure_log,"/var/log/secure.d/%fromhost%_%$year%%$month%%$day%.secure"
+authpriv.* -?Secure_log
+
+
+#journalctl -u rsyslog
+# logger test
